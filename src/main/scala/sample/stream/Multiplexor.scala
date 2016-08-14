@@ -5,16 +5,18 @@ import akka.stream.scaladsl.{ FileIO, Sink }
 import akka.stream.stage.{ Context, _ }
 import akka.util.ByteString
 import java.io.File
+import java.io.RandomAccessFile
 import java.nio.ByteOrder
 
 object Foo {
   def main(args: Array[String]): Unit = {
-
     import system.dispatcher
     implicit val system = ActorSystem("atdm")
     implicit val materializer = ActorMaterializer()
-    val f1 = new File("/tmp/f1.data")
-    val f2 = new File("/tmp/f2.data")
+    val f1 = new File("/tmp/fifo1")
+    //val f1 = new File("/tmp/f1.data")
+    val f2 = new File("/tmp/fifo2")
+    //val f2 = new File("/tmp/f2.data")
     val source1 = FileIO.fromFile(f1, 9).transform(() => new Chunker(9))
     val source2 = FileIO.fromFile(f2, 9).transform(() => new Chunker(9))
     //.runWith(Sink.foreach(println)).onComplete(_ => system.shutdown())
