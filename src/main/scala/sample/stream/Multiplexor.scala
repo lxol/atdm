@@ -3,6 +3,7 @@ package sample.stream
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ FileIO, Sink }
+import akka.util.ByteIterator
 //import akka.stream.stage.{ Context, _ }
 import akka.util.ByteString
 import java.io.File
@@ -27,16 +28,34 @@ object Foo {
   }
 }
 
-case class Header(streamNumber: Short) {
+case class Header(streamNumber: Short, eof: Short) {
   implicit val order = ByteOrder.BIG_ENDIAN
   val magic = "MsBaCkUp"
+  val padding = new Array[Byte](500)
 
   def encode(): ByteString = {
     val bs = ByteString(magic, "UTF-8")
     val builder = ByteString.newBuilder ++= bs
-    builder.putShort(streamNumber).result()
+    builder.putShort(streamNumber).
+      putShort(eof).
+      putBytes(padding).result()
   }
-  def decode(bs: ByteString) = {
-    ???
+
+  def decode(bs: ByteString): Header = {
+    val iter = bs.iterator
+    val bytes = new Array[Byte](8)
+    iter getBytes (bytes)
+    val magicDecoded = ByteString(bytes).utf8String
+    if (magic != magicDecoded) throw new Exception(s"bad header magic string ${magicDecoded}")
+    val streamNumberDecoded = iter.getShort
+    val eofDecoded = iter.getShort
+    Header(streamNumberDecoded, eofDecoded)
+  }
+
+  def getString(iter: ByteIterator): String = {
+    val length = iter.getInt
+    val bytes = new Array[Byte](length)
+    iter getBytes bytes
+    ByteString(bytes).utf8String
   }
 }
