@@ -8,17 +8,21 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteOrder
 
-class Chunker(val chunkSize: Int) extends PushPullStage[ByteString, ByteString] {
-  implicit val order = ByteOrder.LITTLE_ENDIAN
+class Chunker(val chunkSize: Int, val streamNum: Short) extends PushPullStage[ByteString, ByteString] {
+  implicit val order = ByteOrder.BIG_ENDIAN
   private var buffer = ByteString.empty
+
   override def onPush(elem: ByteString, ctx: Context[ByteString]): SyncDirective = {
     buffer ++= elem
     emitChunkOrPull(ctx)
   }
+
   override def onPull(ctx: Context[ByteString]): SyncDirective = emitChunkOrPull(ctx)
+
   override def onUpstreamFinish(ctx: Context[ByteString]): TerminationDirective =
     if (buffer.nonEmpty) ctx.absorbTermination()
     else ctx.finish()
+
   private def emitChunkOrPull(ctx: Context[ByteString]): SyncDirective = {
     if (buffer.isEmpty) {
       if (ctx.isFinishing) ctx.finish()
@@ -29,8 +33,12 @@ class Chunker(val chunkSize: Int) extends PushPullStage[ByteString, ByteString] 
       ctx.push(addHeader(emit))
     }
   }
+
   def addHeader(bytes: ByteString) = {
-    val len = bytes.length
-    ByteString.newBuilder.putInt(len).append(bytes).result()
+    //val len = bytes.length
+    val header = Header(streamNum)
+    val builder = ByteString.newBuilder ++= header.encode()
+    builder.append(bytes).result()
   }
+
 }
