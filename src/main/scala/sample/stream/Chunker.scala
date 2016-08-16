@@ -11,6 +11,7 @@ import java.nio.ByteOrder
 class Chunker(val chunkSize: Int, val streamNum: Short) extends PushPullStage[ByteString, ByteString] {
   implicit val order = ByteOrder.BIG_ENDIAN
   private var buffer = ByteString.empty
+  private var isFinished = false
 
   override def onPush(elem: ByteString, ctx: Context[ByteString]): SyncDirective = {
     buffer ++= elem
@@ -24,21 +25,61 @@ class Chunker(val chunkSize: Int, val streamNum: Short) extends PushPullStage[By
     else ctx.finish()
 
   private def emitChunkOrPull(ctx: Context[ByteString]): SyncDirective = {
+    // val bufferEmpty = buffer.isEmpty
+    // val isFinishing = ctx.isFinishing
+    // val smallBuffer = buffer.length < chunkSize
+    // val sizeOfchunk = buffer.length == chunkSize
+
+    // val bl = buffer.length
+    // isFinishing match {
+    //   case true if bl == 0         => ctx.finish()
+    //   case true if bl <= chunkSize => ctx.push(addHeader(buffer, 1))
+    //   case true if bl > chunkSize => {
+    //     val (emit, nextBuffer) = buffer.splitAt(chunkSize)
+    //     buffer = nextBuffer
+    //     ctx.push(addHeader(emit, 1))
+    //   }
+    //   case false if bl < chunkSize => ctx.pull()
+    //   case false if bl >= chunkSize => {
+    //     val (emit, nextBuffer) = buffer.splitAt(chunkSize)
+    //     buffer = nextBuffer
+    //     ctx.push(addHeader(emit, 0))
+    //   }
+    // }
+
+    // (bufferEmpty, smallBuffer, isFinishing) match {
+
+    //   case (true , _, true) => ctx.finish()
+    //   case (true , _, false) => ctx.pull()
+    //   case (_, true, false) => ctx.pull()
+    //   case (false, true , true) => ctx.push(addHeader(buffer, 1))
+    //   case (false, true , false) => ctx.push(addHeader(buffer, 1))
+
+    //   case _ => ???
+    // }
+
     if (buffer.isEmpty) {
       if (ctx.isFinishing) ctx.finish()
       else ctx.pull()
     } else {
       val (emit, nextBuffer) = buffer.splitAt(chunkSize)
       buffer = nextBuffer
-      ctx.push(addHeader(emit))
+      if (ctx.isFinishing)
+        ctx.push(addHeader(emit, 1))
+      else
+        ctx.push(addHeader(emit, 0))
     }
+
   }
 
-  def addHeader(bytes: ByteString) = {
-    //val len = bytes.length
-    val header = Header(streamNum, 1)
+  def addHeader(bytes: ByteString, eof: Short) = {
+    val invalidCount = 9 - bytes.length
+    val header = Header(streamNum, eof, invalidCount)
     val builder = ByteString.newBuilder ++= header.encode()
-    builder.append(bytes).result()
+    if (invalidCount > 0)
+      builder.append(bytes).putBytes(new Array[Byte](invalidCount)).result()
+    else
+      builder.append(bytes).result()
   }
 
 }

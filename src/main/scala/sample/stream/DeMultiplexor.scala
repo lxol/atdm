@@ -32,11 +32,13 @@ object DeMultiplexor {
 
     // read lines from a log file
     val inputFile = new File("/tmp/output")
-    FileIO.fromFile(inputFile, 9).transform(() => new DeChunker(9)).
+    FileIO.fromFile(inputFile, 9 + 512).transform(() => new DeChunker(9 + 512)).
       map {
-        x =>
+        bs =>
           {
-            val fname = "/tmp/oooo" + x.size + "s" + x.take(1).toString()
+            //val iter = bs.iterator
+            //val o = Header()
+            val fname = "/tmp/oooo" + bs.size + "s" + bs.take(1).toString()
             println(fname)
             ///Source(x).runWith(FileIO.toFile(new File(s"$fname")))
           }

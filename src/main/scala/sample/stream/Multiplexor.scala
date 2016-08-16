@@ -28,18 +28,36 @@ object Foo {
   }
 }
 
-case class Header(streamNumber: Short, eof: Short) {
+case class Header(streamNumber: Short,
+    eof: Short, invalids: Int) {
   implicit val order = ByteOrder.BIG_ENDIAN
-  val magic = "MsBaCkUp"
-  val padding = new Array[Byte](500)
+  val magic = Header.magic
+  val padding = new Array[Byte](496)
+  //val padding = new Array[Byte](2)
 
   def encode(): ByteString = {
     val bs = ByteString(magic, "UTF-8")
     val builder = ByteString.newBuilder ++= bs
     builder.putShort(streamNumber).
       putShort(eof).
+      putInt(invalids).
       putBytes(padding).result()
   }
+
+  def getString(iter: ByteIterator): String = {
+    val length = iter.getInt
+    val bytes = new Array[Byte](length)
+    iter getBytes bytes
+    ByteString(bytes).utf8String
+  }
+}
+
+object Header {
+  implicit val order = ByteOrder.BIG_ENDIAN
+
+  val magic = "MsBaCkUp"
+
+  def apply(bs: ByteString) = decode(bs)
 
   def decode(bs: ByteString): Header = {
     val iter = bs.iterator
@@ -49,13 +67,8 @@ case class Header(streamNumber: Short, eof: Short) {
     if (magic != magicDecoded) throw new Exception(s"bad header magic string ${magicDecoded}")
     val streamNumberDecoded = iter.getShort
     val eofDecoded = iter.getShort
-    Header(streamNumberDecoded, eofDecoded)
+    val invalidsDecoded = iter.getInt
+    Header(streamNumberDecoded, eofDecoded, invalidsDecoded)
   }
 
-  def getString(iter: ByteIterator): String = {
-    val length = iter.getInt
-    val bytes = new Array[Byte](length)
-    iter getBytes bytes
-    ByteString(bytes).utf8String
-  }
 }
