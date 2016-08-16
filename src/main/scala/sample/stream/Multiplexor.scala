@@ -32,7 +32,7 @@ case class Header(streamNumber: Short,
     eof: Short, invalids: Int) {
   implicit val order = ByteOrder.BIG_ENDIAN
   val magic = Header.magic
-  val padding = new Array[Byte](496)
+  val padding = Header.padding
   //val padding = new Array[Byte](2)
 
   def encode(): ByteString = {
@@ -44,19 +44,19 @@ case class Header(streamNumber: Short,
       putBytes(padding).result()
   }
 
-  def getString(iter: ByteIterator): String = {
-    val length = iter.getInt
-    val bytes = new Array[Byte](length)
-    iter getBytes bytes
-    ByteString(bytes).utf8String
-  }
+  // def getString(iter: ByteIterator): String = {
+  //   val length = iter.getInt
+  //   val bytes = new Array[Byte](length)
+  //   iter getBytes bytes
+  //   ByteString(bytes).utf8String
+  // }
 }
 
 object Header {
   implicit val order = ByteOrder.BIG_ENDIAN
 
   val magic = "MsBaCkUp"
-
+  val padding = new Array[Byte](496)
   def apply(bs: ByteString) = decode(bs)
 
   def decode(bs: ByteString): Header = {

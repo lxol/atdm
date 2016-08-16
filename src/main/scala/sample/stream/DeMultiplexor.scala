@@ -1,6 +1,7 @@
 package sample.stream
 
-import java.io.File
+import akka.stream.Supervision
+import java.io.{ File, FileOutputStream }
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
@@ -13,7 +14,6 @@ import scala.annotation.tailrec
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{ FileIO, Sink }
-import akka.stream.stage.{ Context, _ }
 import akka.util.ByteString
 import java.io.File
 import java.io.RandomAccessFile
@@ -25,76 +25,17 @@ object DeMultiplexor {
     // actor system and implicit materializer
     implicit val system = ActorSystem("Sys")
     implicit val materializer = ActorMaterializer()
-
-    // execution context
-
-    val LoglevelPattern = """.*\[(DEBUG|INFO|WARN|ERROR)\].*""".r
-
-    // read lines from a log file
-    val inputFile = new File("/tmp/output")
-    FileIO.fromFile(inputFile, 9 + 512).transform(() => new DeChunker(9 + 512)).
+    val inputFile = new File("/tmp/out.data")
+    FileIO.fromFile(inputFile, 512 + 9). //transform(() => new DeChunker(512 + 9)).
       map {
         bs =>
           {
-            //val iter = bs.iterator
-            //val o = Header()
-            val fname = "/tmp/oooo" + bs.size + "s" + bs.take(1).toString()
-            println(fname)
-            ///Source(x).runWith(FileIO.toFile(new File(s"$fname")))
+            val (headerByteString, payload) = bs.splitAt(512)
+            val header = Header(headerByteString)
+            val os = new FileOutputStream(s"/tmp/result${header.streamNumber}", true)
+            os.write(payload.toArray, 0, 9 - header.invalids)
           }
       }.
       runWith(Sink.onComplete { _ => system.shutdown() })
-
-    //???
-
-    // FileIO.fromFile(inputFile).
-    //   // parse chunks of bytes into lines
-    //   via(Framing.delimiter(ByteString(System.lineSeparator), maximumFrameLength = 512, allowTruncation = true)).
-    //   map(_.utf8String).
-    //   map {
-    //     case line @ LoglevelPattern(level) => (level, line)
-    //     case line @ other                  => ("OTHER", line)
-    //   }.
-    //   // group them by log level
-    //   groupBy(5, _._1).
-    //   fold(("", List.empty[String])) {
-    //     case ((_, list), (level, line)) => (level, line :: list)
-    //   }.
-    //   // write lines of each group to a separate file
-    //   mapAsync(parallelism = 5) {
-    //     case (level, groupList) =>
-    //       Source(groupList.reverse).map(line => ByteString(line + "\n")).runWith(FileIO.toFile(new File(s"target/log-$level.txt")))
-    //   }.
-    //   mergeSubstreams.
-    //   runWith(Sink.onComplete { _ =>
-    //     system.shutdown()
-    //   })
-  }
-}
-
-class DeChunker(val chunkSize: Int) extends PushPullStage[ByteString, ByteString] {
-  implicit val order = ByteOrder.LITTLE_ENDIAN
-  private var buffer = ByteString.empty
-  override def onPush(elem: ByteString, ctx: Context[ByteString]): SyncDirective = {
-    buffer ++= elem
-    emitChunkOrPull(ctx)
-  }
-  override def onPull(ctx: Context[ByteString]): SyncDirective = emitChunkOrPull(ctx)
-  override def onUpstreamFinish(ctx: Context[ByteString]): TerminationDirective =
-    if (buffer.nonEmpty) ctx.absorbTermination()
-    else ctx.finish()
-  private def emitChunkOrPull(ctx: Context[ByteString]): SyncDirective = {
-    if (buffer.isEmpty) {
-      if (ctx.isFinishing) ctx.finish()
-      else ctx.pull()
-    } else {
-      val (emit, nextBuffer) = buffer.splitAt(chunkSize)
-      buffer = nextBuffer
-      ctx.push(addHeader(emit))
-    }
-  }
-  def addHeader(bytes: ByteString) = {
-    val len = bytes.length
-    ByteString.newBuilder.putInt(len).append(bytes).result()
   }
 }
