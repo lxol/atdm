@@ -73,7 +73,7 @@ class Chunker(val chunkSize: Int, val streamNum: Short) extends PushPullStage[By
   }
 
   def addHeader(bytes: ByteString, eof: Short) = {
-    val invalidCount = 9 - bytes.length
+    val invalidCount = Frame.payloadSize - bytes.length
     val header = Header(streamNum, eof, invalidCount)
     val builder = ByteString.newBuilder ++= header.encode()
     if (invalidCount > 0)

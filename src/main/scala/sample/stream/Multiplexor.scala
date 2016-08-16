@@ -20,9 +20,8 @@ object Foo {
     val f1 = new File("/tmp/f1.data")
     //val f2 = new File("/tmp/fifo2")
     val f2 = new File("/tmp/f2.data")
-    val source1 = FileIO.fromFile(f1, 9).transform(() => new Chunker(9, 1))
-    val source2 = FileIO.fromFile(f2, 9).transform(() => new Chunker(9, 2))
-    //.runWith(Sink.foreach(println)).onComplete(_ => system.shutdown())
+    val source1 = FileIO.fromFile(f1, Frame.payloadSize).transform(() => new Chunker(Frame.payloadSize, 1))
+    val source2 = FileIO.fromFile(f2, Frame.payloadSize).transform(() => new Chunker(Frame.payloadSize, 2))
     source1.merge(source2)
       .runWith(FileIO.toFile(new File("/tmp/out.data"), false)).onComplete(_ => system.shutdown())
   }
@@ -43,20 +42,14 @@ case class Header(streamNumber: Short,
       putInt(invalids).
       putBytes(padding).result()
   }
-
-  // def getString(iter: ByteIterator): String = {
-  //   val length = iter.getInt
-  //   val bytes = new Array[Byte](length)
-  //   iter getBytes bytes
-  //   ByteString(bytes).utf8String
-  // }
 }
 
 object Header {
   implicit val order = ByteOrder.BIG_ENDIAN
 
+  val size = 512
   val magic = "MsBaCkUp"
-  val padding = new Array[Byte](496)
+  val padding = new Array[Byte](size - 16)
   def apply(bs: ByteString) = decode(bs)
 
   def decode(bs: ByteString): Header = {
@@ -71,4 +64,9 @@ object Header {
     Header(streamNumberDecoded, eofDecoded, invalidsDecoded)
   }
 
+}
+
+object Frame {
+  val size = 1024
+  val payloadSize = size - Header.size
 }

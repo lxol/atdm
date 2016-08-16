@@ -26,14 +26,15 @@ object DeMultiplexor {
     implicit val system = ActorSystem("Sys")
     implicit val materializer = ActorMaterializer()
     val inputFile = new File("/tmp/out.data")
-    FileIO.fromFile(inputFile, 512 + 9). //transform(() => new DeChunker(512 + 9)).
+    FileIO.fromFile(inputFile, Frame.size). //transform(() => new DeChunker(512 + q9)).
       map {
         bs =>
           {
-            val (headerByteString, payload) = bs.splitAt(512)
+            val (headerByteString, payload) = bs.splitAt(Header.size)
             val header = Header(headerByteString)
+            //println(s"h: ${header.magic}")
             val os = new FileOutputStream(s"/tmp/result${header.streamNumber}", true)
-            os.write(payload.toArray, 0, 9 - header.invalids)
+            os.write(payload.toArray, 0, Frame.payloadSize - header.invalids)
           }
       }.
       runWith(Sink.onComplete { _ => system.shutdown() })
